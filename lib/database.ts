@@ -124,6 +124,15 @@ export async function deleteTask(id: number): Promise<void> {
   await database.runAsync(`DELETE FROM tasks WHERE id = ?`, [id]);
 }
 
+export async function searchTasks(query: string): Promise<Task[]> {
+  const database = await getDatabase();
+  const pattern = `%${query}%`;
+  return database.getAllAsync<Task>(
+    `SELECT * FROM tasks WHERE status = 'done' AND (title LIKE ? OR description LIKE ?) ORDER BY completed_at DESC`,
+    [pattern, pattern]
+  );
+}
+
 export async function updateTaskOrder(tasks: { id: number; order_index: number }[]): Promise<void> {
   const database = await getDatabase();
   for (const task of tasks) {

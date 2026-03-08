@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, FlatList, View, Text } from 'react-native';
+import { StyleSheet, FlatList, View, Text, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -50,9 +50,22 @@ export default function TodayScreen() {
     await loadTasks();
   };
 
-  const handleDelete = async (id: number) => {
-    await deleteTask(id);
-    await loadTasks();
+  const handleDelete = (id: number) => {
+    Alert.alert(
+      'Delete Task',
+      'Are you sure you want to delete this task?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteTask(id);
+            await loadTasks();
+          },
+        },
+      ]
+    );
   };
 
   const handleDragEnd = async ({ data }: { data: Task[] }) => {
@@ -78,6 +91,8 @@ export default function TodayScreen() {
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.container}>
       <AddTaskInput onAdd={handleAdd} />
 
       <View style={styles.content}>
@@ -120,6 +135,8 @@ export default function TodayScreen() {
           )}
         </View>
       </View>
+        </View>
+      </TouchableWithoutFeedback>
     </GestureHandlerRootView>
   );
 }
