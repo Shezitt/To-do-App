@@ -1,6 +1,4 @@
-const API_BASE = __DEV__
-  ? 'http://192.168.100.48:8000/api'  // Local network IP (for Expo Go on physical device)
-  : 'https://your-server.com/api'; // Production URL (update when deploying)
+const API_BASE = 'http://159.112.140.85/api';
 
 interface ApiTask {
   id: number;
