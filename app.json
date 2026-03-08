@@ -43,6 +43,12 @@
         "projectId": "2b58f900-f778-42b7-b8d2-ece634ce1627"
       }
     },
-    "owner": "shezitt"
+    "owner": "shezitt",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2b58f900-f778-42b7-b8d2-ece634ce1627"
+    }
   }
 }

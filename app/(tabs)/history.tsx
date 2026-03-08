@@ -5,7 +5,7 @@ import { Calendar, DateData } from 'react-native-calendars';
 
 import { useColors } from '@/components/Themed';
 import TaskItem from '@/components/TaskItem';
-import { Task, getTasksByDate, getCompletedDates } from '@/lib/database';
+import { Task, getTasksByDate, getCompletedDates } from '@/lib/sync';
 import Colors from '@/constants/Colors';
 
 export default function HistoryScreen() {

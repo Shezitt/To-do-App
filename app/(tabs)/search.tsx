@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useColors } from '@/components/Themed';
 import TaskItem from '@/components/TaskItem';
-import { Task, searchTasks } from '@/lib/database';
+import { Task, searchTasks } from '@/lib/sync';
 
 export default function SearchScreen() {
   const colors = useColors();

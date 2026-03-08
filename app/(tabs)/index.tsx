@@ -16,7 +16,7 @@ import {
   undoTask,
   deleteTask,
   updateTaskOrder,
-} from '@/lib/database';
+} from '@/lib/sync';
 
 export default function TodayScreen() {
   const colors = useColors();

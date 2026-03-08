@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { syncFromServer } from '@/lib/sync';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -30,6 +31,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
+      syncFromServer();
     }
   }, [loaded]);
 
