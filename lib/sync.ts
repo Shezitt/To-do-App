@@ -11,8 +11,6 @@ import {
   getCompletedDates,
   searchTasks,
   getCategories,
-  addCategory,
-  deleteCategory,
 } from './database';
 
 const completionSound = require('@/assets/sounds/complete.wav');
@@ -24,7 +22,32 @@ const undoPlayer = createAudioPlayer(undoSound);
 export type { Task, Category };
 
 // Re-export read operations unchanged (always read from local SQLite)
-export { getPendingTasks, getDoneTodayTasks, getTasksByDate, getCompletedDates, searchTasks, getCategories, addCategory, deleteCategory };
+export { getPendingTasks, getDoneTodayTasks, getTasksByDate, getCompletedDates, searchTasks, getCategories };
+
+export async function addCategory(name: string, color: string): Promise<void> {
+  const database = await getDatabase();
+  try {
+    const serverCat = await api.createCategory(name, color);
+    await database.runAsync(
+      `INSERT OR REPLACE INTO categories (id, name, color, created_at) VALUES (?, ?, ?, ?)`,
+      [serverCat.id, serverCat.name, serverCat.color, serverCat.created_at]
+    );
+  } catch (error) {
+    console.warn('[sync] API unreachable, adding category locally:', error);
+    await database.runAsync(`INSERT INTO categories (name, color) VALUES (?, ?)`, [name, color]);
+  }
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  const database = await getDatabase();
+  try {
+    await api.deleteCategory(id);
+  } catch (error) {
+    console.warn('[sync] API unreachable, deleting category locally only:', error);
+  }
+  await database.runAsync(`UPDATE tasks SET category_id = NULL WHERE category_id = ?`, [id]);
+  await database.runAsync(`DELETE FROM categories WHERE id = ?`, [id]);
+}
 
 /**
  * Pull all tasks from the API and replace local SQLite data.

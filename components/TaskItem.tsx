@@ -3,8 +3,6 @@ import {
   StyleSheet,
   Pressable,
   LayoutAnimation,
-  Platform,
-  UIManager,
   View,
   Text,
   Animated,
@@ -13,9 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from './Themed';
 import { Task } from '@/lib/database';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface TaskItemProps {
   task: Task;
