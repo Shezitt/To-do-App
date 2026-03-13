@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   Pressable,
@@ -7,6 +7,7 @@ import {
   UIManager,
   View,
   Text,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from './Themed';
@@ -35,7 +36,10 @@ export default function TaskItem({
 }: TaskItemProps) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const isDone = task.status === 'done';
+  const showCheck = isDone || completing;
+  const checkScale = useRef(new Animated.Value(1)).current;
 
   const toggleExpand = () => {
     if (task.description) {
@@ -59,16 +63,26 @@ export default function TaskItem({
         {!readOnly && (
           <Pressable
             onPress={() => {
-              if (isDone && onUndo) onUndo(task.id);
-              else if (!isDone && onComplete) onComplete(task.id);
+              if (isDone && onUndo) {
+                onUndo(task.id);
+              } else if (!isDone && onComplete) {
+                setCompleting(true);
+                Animated.sequence([
+                  Animated.spring(checkScale, { toValue: 1.5, useNativeDriver: true, speed: 40, bounciness: 20 }),
+                  Animated.spring(checkScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }),
+                ]).start();
+                onComplete(task.id);
+              }
             }}
             hitSlop={8}
             style={styles.checkbox}>
-            <Ionicons
-              name={isDone ? 'checkmark-circle' : 'ellipse-outline'}
-              size={26}
-              color={isDone ? colors.done : colors.tint}
-            />
+            <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+              <Ionicons
+                name={showCheck ? 'checkmark-circle' : 'ellipse-outline'}
+                size={26}
+                color={showCheck ? colors.done : colors.tint}
+              />
+            </Animated.View>
           </Pressable>
         )}
         {readOnly && (
@@ -87,6 +101,14 @@ export default function TaskItem({
             numberOfLines={expanded ? undefined : 1}>
             {task.title}
           </Text>
+          {task.category_name && task.category_color && (
+            <View style={[styles.categoryBadge, { backgroundColor: task.category_color + '20' }]}>
+              <View style={[styles.categoryDot, { backgroundColor: task.category_color }]} />
+              <Text style={[styles.categoryText, { color: task.category_color }]}>
+                {task.category_name}
+              </Text>
+            </View>
+          )}
           {task.description && !expanded && (
             <Text style={[styles.descriptionHint, { color: colors.textSecondary }]} numberOfLines={1}>
               {task.description}
@@ -141,6 +163,25 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  categoryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  categoryText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   descriptionHint: {
     fontSize: 13,

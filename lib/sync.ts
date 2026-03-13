@@ -1,4 +1,5 @@
 import { createAudioPlayer } from 'expo-audio';
+import * as Haptics from 'expo-haptics';
 import { api } from './api';
 import {
   Task,
@@ -127,7 +128,8 @@ export async function completeTask(id: number): Promise<void> {
     );
   }
 
-  // Play completion sound (fire-and-forget)
+  // Haptic feedback (instant) + sound
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   try {
     completionPlayer.seekTo(0);
     completionPlayer.play();
