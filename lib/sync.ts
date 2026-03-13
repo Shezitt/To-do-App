@@ -18,6 +18,9 @@ import {
 const completionSound = require('@/assets/sounds/complete.wav');
 const completionPlayer = createAudioPlayer(completionSound);
 
+const undoSound = require('@/assets/sounds/undo.wav');
+const undoPlayer = createAudioPlayer(undoSound);
+
 export type { Task, Category };
 
 // Re-export read operations unchanged (always read from local SQLite)
@@ -143,6 +146,14 @@ export async function completeTask(id: number): Promise<void> {
  */
 export async function undoTask(id: number): Promise<void> {
   const database = await getDatabase();
+
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  try {
+    undoPlayer.seekTo(0);
+    undoPlayer.play();
+  } catch (err) {
+    console.warn('[sync] Failed to play undo sound:', err);
+  }
 
   try {
     const serverTask = await api.undoTask(id);

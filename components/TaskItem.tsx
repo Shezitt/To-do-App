@@ -66,6 +66,10 @@ export default function TaskItem({
           <Pressable
             onPress={() => {
               if (isDone && onUndo) {
+                Animated.sequence([
+                  Animated.spring(checkScale, { toValue: 0.7, useNativeDriver: true, speed: 40, bounciness: 0 }),
+                  Animated.spring(checkScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }),
+                ]).start();
                 onUndo(task.id);
               } else if (!isDone && onComplete) {
                 setCompleting(true);
