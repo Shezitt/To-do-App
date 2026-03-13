@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { StyleSheet, View, Text, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -124,6 +125,28 @@ export default function TodayScreen() {
     </ScaleDecorator>
   );
 
+  const totalToday = pendingTasks.length + doneTasks.length;
+  const allDone = pendingTasks.length === 0 && doneTasks.length > 0;
+  const noTasksYet = pendingTasks.length === 0 && doneTasks.length === 0;
+
+  const emptyPendingState = (
+    <View style={styles.emptyContainer}>
+      {allDone ? (
+        <>
+          <Ionicons name="checkmark-circle" size={56} color={colors.done} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>All done for today!</Text>
+          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>Great work, keep it up</Text>
+        </>
+      ) : (
+        <>
+          <Ionicons name="list-outline" size={56} color={colors.textSecondary + '50'} />
+          <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No tasks yet</Text>
+          <Text style={[styles.emptySubtext, { color: colors.textSecondary + '80' }]}>Add one above to get started</Text>
+        </>
+      )}
+    </View>
+  );
+
   const doneFooter = (
     <View style={[styles.doneSection, { borderTopColor: colors.border }]}>
       <Text style={[styles.sectionTitle, { color: colors.done }]}>
@@ -133,7 +156,7 @@ export default function TodayScreen() {
         </Text>
       </Text>
       {filteredDone.length === 0 ? (
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No tasks here</Text>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nothing completed yet</Text>
       ) : (
         filteredDone.map((item) => (
           <TaskItem key={item.id} task={item} onUndo={handleUndo} />
@@ -157,6 +180,25 @@ export default function TodayScreen() {
             onDelete={handleDeleteCategory}
           />
 
+          {totalToday > 0 && (
+            <View style={styles.progressContainer}>
+              <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: allDone ? colors.done : colors.tint,
+                      width: `${(doneTasks.length / totalToday) * 100}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+                {doneTasks.length}/{totalToday} done
+              </Text>
+            </View>
+          )}
+
           <View style={styles.content}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Pending{' '}
@@ -166,7 +208,7 @@ export default function TodayScreen() {
             </Text>
             {filteredPending.length === 0 ? (
               <View style={styles.container}>
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No tasks here</Text>
+                {emptyPendingState}
                 {doneFooter}
               </View>
             ) : (
@@ -200,6 +242,29 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 4,
+    gap: 10,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    minWidth: 48,
+    textAlign: 'right',
+  },
   doneSection: {
     borderTopWidth: 1,
     paddingTop: 4,
@@ -211,6 +276,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginHorizontal: 20,
     marginVertical: 10,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    marginTop: 4,
   },
   emptyText: {
     textAlign: 'center',

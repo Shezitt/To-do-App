@@ -55,6 +55,8 @@ export default function TaskItem({
         {
           backgroundColor: colors.surface,
           borderColor: colors.border,
+          borderLeftColor: task.category_color ?? colors.border,
+          borderLeftWidth: task.category_color ? 3 : 1,
           opacity: isDragging ? 0.8 : 1,
           transform: isDragging ? [{ scale: 1.03 }] : [{ scale: 1 }],
         },
