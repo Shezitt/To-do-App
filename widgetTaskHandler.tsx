@@ -1,5 +1,5 @@
+import React from 'react';
 import { WidgetTaskHandlerProps } from 'react-native-android-widget';
-import { renderReactNativeWidget } from 'react-native-android-widget';
 import { TaskWidget } from './widgets/TaskWidget';
 import { getDatabase } from './lib/database';
 
