@@ -5,10 +5,14 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import { registerWidgetTaskHandler } from 'react-native-android-widget';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { syncFromServer } from '@/lib/sync';
+import { widgetTaskHandler } from '@/widgetTaskHandler';
+
+registerWidgetTaskHandler(widgetTaskHandler);
 
 export { ErrorBoundary } from 'expo-router';
 

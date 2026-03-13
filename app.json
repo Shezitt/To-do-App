@@ -33,7 +33,26 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-audio"
+      "expo-audio",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "TaskWidget",
+              "label": "Tasks Today",
+              "description": "Your pending tasks for today",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 3,
+              "updatePeriodMillis": 1800000,
+              "widgetTaskHandler": "./widgetTaskHandler"
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
