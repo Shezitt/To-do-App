@@ -8,6 +8,15 @@ interface ApiTask {
   order_index: number;
   completed_date: string | null;
   completed_at: string | null;
+  category_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ApiCategory {
+  id: number;
+  name: string;
+  color: string;
   created_at: string;
   updated_at: string;
 }
@@ -37,10 +46,10 @@ export const api = {
     return request(`/tasks${query ? `?${query}` : ''}`);
   },
 
-  createTask(title: string, description?: string | null): Promise<ApiTask> {
+  createTask(title: string, description?: string | null, categoryId?: number | null): Promise<ApiTask> {
     return request('/tasks', {
       method: 'POST',
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify({ title, description, category_id: categoryId }),
     });
   },
 
@@ -69,5 +78,21 @@ export const api = {
 
   getCompletedDates(): Promise<string[]> {
     return request('/tasks/dates');
+  },
+
+  // Categories
+  getCategories(): Promise<ApiCategory[]> {
+    return request('/categories');
+  },
+
+  createCategory(name: string, color: string): Promise<ApiCategory> {
+    return request('/categories', {
+      method: 'POST',
+      body: JSON.stringify({ name, color }),
+    });
+  },
+
+  deleteCategory(id: number): Promise<void> {
+    return request(`/categories/${id}`, { method: 'DELETE' });
   },
 };

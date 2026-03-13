@@ -13,8 +13,38 @@ function getLocalDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+export const CATEGORY_COLORS = [
+  '#6366F1', // Indigo
+  '#F59E0B', // Amber
+  '#10B981', // Emerald
+  '#EC4899', // Pink
+  '#8B5CF6', // Violet
+  '#14B8A6', // Teal
+  '#EF4444', // Red
+  '#3B82F6', // Blue
+  '#F97316', // Orange
+  '#84CC16', // Lime
+];
+
 async function initDB(): Promise<SQLite.SQLiteDatabase> {
   const database = await SQLite.openDatabaseAsync(DB_NAME);
+
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+  `);
+
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,13 +54,21 @@ async function initDB(): Promise<SQLite.SQLiteDatabase> {
       order_index INTEGER NOT NULL DEFAULT 0,
       completed_date TEXT,
       completed_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      category_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
     );
   `);
-  const cols = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(tasks)`);
-  if (!cols.some((c) => c.name === 'completed_at')) {
+
+  // Migrations for existing databases
+  const taskCols = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(tasks)`);
+  if (!taskCols.some((c) => c.name === 'completed_at')) {
     await database.execAsync(`ALTER TABLE tasks ADD COLUMN completed_at TEXT`);
   }
+  if (!taskCols.some((c) => c.name === 'category_id')) {
+    await database.execAsync(`ALTER TABLE tasks ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL`);
+  }
+
   db = database;
   return database;
 }
@@ -50,25 +88,32 @@ export interface Task {
   order_index: number;
   completed_date: string | null;
   completed_at: string | null;
+  category_id: number | null;
   created_at: string;
+  // Joined from categories table (not always present)
+  category_name?: string;
+  category_color?: string;
 }
 
-export async function addTask(title: string, description?: string): Promise<void> {
+export async function addTask(title: string, description?: string, categoryId?: number): Promise<void> {
   const database = await getDatabase();
   const result = await database.getFirstAsync<{ max_order: number | null }>(
     `SELECT MAX(order_index) as max_order FROM tasks WHERE status = 'pending'`
   );
   const nextOrder = (result?.max_order ?? -1) + 1;
   await database.runAsync(
-    `INSERT INTO tasks (title, description, status, order_index) VALUES (?, ?, 'pending', ?)`,
-    [title, description || null, nextOrder]
+    `INSERT INTO tasks (title, description, status, order_index, category_id) VALUES (?, ?, 'pending', ?, ?)`,
+    [title, description || null, nextOrder, categoryId || null]
   );
 }
+
+const TASK_SELECT = `SELECT t.*, c.name as category_name, c.color as category_color
+  FROM tasks t LEFT JOIN categories c ON t.category_id = c.id`;
 
 export async function getPendingTasks(): Promise<Task[]> {
   const database = await getDatabase();
   return database.getAllAsync<Task>(
-    `SELECT * FROM tasks WHERE status = 'pending' ORDER BY order_index ASC`
+    `${TASK_SELECT} WHERE t.status = 'pending' ORDER BY t.order_index ASC`
   );
 }
 
@@ -76,7 +121,7 @@ export async function getDoneTodayTasks(): Promise<Task[]> {
   const database = await getDatabase();
   const today = getLocalDateString();
   return database.getAllAsync<Task>(
-    `SELECT * FROM tasks WHERE status = 'done' AND completed_date = ? ORDER BY completed_at ASC`,
+    `${TASK_SELECT} WHERE t.status = 'done' AND t.completed_date = ? ORDER BY t.completed_at ASC`,
     [today]
   );
 }
@@ -84,7 +129,7 @@ export async function getDoneTodayTasks(): Promise<Task[]> {
 export async function getTasksByDate(date: string): Promise<Task[]> {
   const database = await getDatabase();
   return database.getAllAsync<Task>(
-    `SELECT * FROM tasks WHERE status = 'done' AND completed_date = ? ORDER BY completed_at ASC`,
+    `${TASK_SELECT} WHERE t.status = 'done' AND t.completed_date = ? ORDER BY t.completed_at ASC`,
     [date]
   );
 }
@@ -128,7 +173,7 @@ export async function searchTasks(query: string): Promise<Task[]> {
   const database = await getDatabase();
   const pattern = `%${query}%`;
   return database.getAllAsync<Task>(
-    `SELECT * FROM tasks WHERE status = 'done' AND (title LIKE ? OR description LIKE ?) ORDER BY completed_at DESC`,
+    `${TASK_SELECT} WHERE t.status = 'done' AND (t.title LIKE ? OR t.description LIKE ?) ORDER BY t.completed_at DESC`,
     [pattern, pattern]
   );
 }
@@ -141,4 +186,22 @@ export async function updateTaskOrder(tasks: { id: number; order_index: number }
       [task.order_index, task.id]
     );
   }
+}
+
+// Category CRUD
+
+export async function getCategories(): Promise<Category[]> {
+  const database = await getDatabase();
+  return database.getAllAsync<Category>(`SELECT * FROM categories ORDER BY id ASC`);
+}
+
+export async function addCategory(name: string, color: string): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync(`INSERT INTO categories (name, color) VALUES (?, ?)`, [name, color]);
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync(`UPDATE tasks SET category_id = NULL WHERE category_id = ?`, [id]);
+  await database.runAsync(`DELETE FROM categories WHERE id = ?`, [id]);
 }

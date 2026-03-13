@@ -1,18 +1,26 @@
+import { createAudioPlayer } from 'expo-audio';
 import { api } from './api';
 import {
   Task,
+  Category,
   getDatabase,
   getPendingTasks,
   getDoneTodayTasks,
   getTasksByDate,
   getCompletedDates,
   searchTasks,
+  getCategories,
+  addCategory,
+  deleteCategory,
 } from './database';
 
-export type { Task };
+const completionSound = require('@/assets/sounds/complete.wav');
+const completionPlayer = createAudioPlayer(completionSound);
+
+export type { Task, Category };
 
 // Re-export read operations unchanged (always read from local SQLite)
-export { getPendingTasks, getDoneTodayTasks, getTasksByDate, getCompletedDates, searchTasks };
+export { getPendingTasks, getDoneTodayTasks, getTasksByDate, getCompletedDates, searchTasks, getCategories, addCategory, deleteCategory };
 
 /**
  * Pull all tasks from the API and replace local SQLite data.
@@ -20,15 +28,37 @@ export { getPendingTasks, getDoneTodayTasks, getTasksByDate, getCompletedDates, 
  */
 export async function syncFromServer(): Promise<void> {
   try {
-    const remoteTasks = await api.getTasks();
     const database = await getDatabase();
+
+    // Sync categories
+    try {
+      const remoteCategories = await api.getCategories();
+      await database.execAsync(`DELETE FROM categories`);
+      for (const cat of remoteCategories) {
+        await database.runAsync(
+          `INSERT INTO categories (id, name, color, created_at) VALUES (?, ?, ?, ?)`,
+          [cat.id, cat.name, cat.color, cat.created_at]
+        );
+      }
+      console.log(`[sync] Synced ${remoteCategories.length} categories from server`);
+    } catch (catError) {
+      console.warn('[sync] Failed to sync categories, using local:', catError);
+    }
+
+    // Sync tasks — preserve local category_id if server doesn't support it yet
+    const remoteTasks = await api.getTasks();
+    const localTasks = await database.getAllAsync<{ id: number; category_id: number | null }>(
+      `SELECT id, category_id FROM tasks`
+    );
+    const localCategoryMap = new Map(localTasks.map((t) => [t.id, t.category_id]));
 
     await database.execAsync(`DELETE FROM tasks`);
 
     for (const task of remoteTasks) {
+      const resolvedCategoryId = task.category_id ?? localCategoryMap.get(task.id) ?? null;
       await database.runAsync(
-        `INSERT INTO tasks (id, title, description, status, order_index, completed_date, completed_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO tasks (id, title, description, status, order_index, completed_date, completed_at, category_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           task.id,
           task.title,
@@ -37,6 +67,7 @@ export async function syncFromServer(): Promise<void> {
           task.order_index,
           task.completed_date,
           task.completed_at,
+          resolvedCategoryId,
           task.created_at,
         ]
       );
@@ -51,15 +82,15 @@ export async function syncFromServer(): Promise<void> {
  * Add a task: API first, then store locally with server ID.
  * Falls back to local-only if API is unreachable.
  */
-export async function addTask(title: string, description?: string): Promise<void> {
+export async function addTask(title: string, description?: string, categoryId?: number): Promise<void> {
   const database = await getDatabase();
 
   try {
-    const serverTask = await api.createTask(title, description || null);
+    const serverTask = await api.createTask(title, description || null, categoryId || null);
     await database.runAsync(
-      `INSERT INTO tasks (id, title, description, status, order_index, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [serverTask.id, serverTask.title, serverTask.description, serverTask.status, serverTask.order_index, serverTask.created_at]
+      `INSERT INTO tasks (id, title, description, status, order_index, category_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [serverTask.id, serverTask.title, serverTask.description, serverTask.status, serverTask.order_index, serverTask.category_id ?? categoryId ?? null, serverTask.created_at]
     );
   } catch (error) {
     console.warn('[sync] API unreachable, adding locally:', error);
@@ -68,14 +99,14 @@ export async function addTask(title: string, description?: string): Promise<void
     );
     const nextOrder = (result?.max_order ?? -1) + 1;
     await database.runAsync(
-      `INSERT INTO tasks (title, description, status, order_index) VALUES (?, ?, 'pending', ?)`,
-      [title, description || null, nextOrder]
+      `INSERT INTO tasks (title, description, status, order_index, category_id) VALUES (?, ?, 'pending', ?, ?)`,
+      [title, description || null, nextOrder, categoryId || null]
     );
   }
 }
 
 /**
- * Complete a task: API first, then update locally.
+ * Complete a task: API first, then update locally. Plays a sound on completion.
  */
 export async function completeTask(id: number): Promise<void> {
   const database = await getDatabase();
@@ -94,6 +125,14 @@ export async function completeTask(id: number): Promise<void> {
       `UPDATE tasks SET status = 'done', completed_date = ?, completed_at = ? WHERE id = ?`,
       [today, now.toISOString(), id]
     );
+  }
+
+  // Play completion sound (fire-and-forget)
+  try {
+    completionPlayer.seekTo(0);
+    completionPlayer.play();
+  } catch (err) {
+    console.warn('[sync] Failed to play completion sound:', err);
   }
 }
 

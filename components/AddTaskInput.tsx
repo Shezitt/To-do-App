@@ -2,21 +2,25 @@ import React, { useState } from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from './Themed';
+import CategoryPicker from './CategoryPicker';
+import { Category } from '@/lib/database';
 
 interface AddTaskInputProps {
-  onAdd: (title: string, description?: string) => void;
+  onAdd: (title: string, description?: string, categoryId?: number) => void;
+  categories: Category[];
 }
 
-export default function AddTaskInput({ onAdd }: AddTaskInputProps) {
+export default function AddTaskInput({ onAdd, categories }: AddTaskInputProps) {
   const colors = useColors();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [showDescription, setShowDescription] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
 
   const handleAdd = () => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
-    onAdd(trimmedTitle, description.trim() || undefined);
+    onAdd(trimmedTitle, description.trim() || undefined, selectedCategoryId || undefined);
     setTitle('');
     setDescription('');
     setShowDescription(false);
@@ -61,6 +65,13 @@ export default function AddTaskInput({ onAdd }: AddTaskInputProps) {
           onChangeText={setDescription}
           multiline
           numberOfLines={3}
+        />
+      )}
+      {categories.length > 0 && (
+        <CategoryPicker
+          categories={categories}
+          selectedId={selectedCategoryId}
+          onSelect={setSelectedCategoryId}
         />
       )}
     </View>
