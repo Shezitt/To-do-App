@@ -14,10 +14,20 @@ import {
 } from './database';
 
 const completionSound = require('@/assets/sounds/complete.wav');
-const completionPlayer = createAudioPlayer(completionSound);
-
 const undoSound = require('@/assets/sounds/undo.wav');
-const undoPlayer = createAudioPlayer(undoSound);
+
+let completionPlayer: ReturnType<typeof createAudioPlayer> | null = null;
+let undoPlayer: ReturnType<typeof createAudioPlayer> | null = null;
+
+function getCompletionPlayer() {
+  if (!completionPlayer) completionPlayer = createAudioPlayer(completionSound);
+  return completionPlayer;
+}
+
+function getUndoPlayer() {
+  if (!undoPlayer) undoPlayer = createAudioPlayer(undoSound);
+  return undoPlayer;
+}
 
 export type { Task, Category };
 
@@ -157,8 +167,9 @@ export async function completeTask(id: number): Promise<void> {
   // Haptic feedback (instant) + sound
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   try {
-    completionPlayer.seekTo(0);
-    completionPlayer.play();
+    const player = getCompletionPlayer();
+    player.seekTo(0);
+    player.play();
   } catch (err) {
     console.warn('[sync] Failed to play completion sound:', err);
   }
@@ -172,8 +183,9 @@ export async function undoTask(id: number): Promise<void> {
 
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   try {
-    undoPlayer.seekTo(0);
-    undoPlayer.play();
+    const player = getUndoPlayer();
+    player.seekTo(0);
+    player.play();
   } catch (err) {
     console.warn('[sync] Failed to play undo sound:', err);
   }
