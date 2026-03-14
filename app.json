@@ -23,7 +23,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.shezitt.todoapp"
+      "package": "com.shezitt.todoapp",
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
