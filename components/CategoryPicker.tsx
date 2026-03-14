@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, View, Text, Alert } from 'react-native';
+import { StyleSheet, Pressable, View, Text, Alert } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from './Themed';
 import { Category } from '@/lib/database';
@@ -48,7 +49,7 @@ export default function CategoryPicker({
       style={styles.scrollView}
       contentContainerStyle={styles.container}>
       {showAll && (
-        <TouchableOpacity
+        <Pressable
           onPress={() => onSelect(null)}
           style={[
             styles.chip,
@@ -64,12 +65,12 @@ export default function CategoryPicker({
             ]}>
             All
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       )}
       {categories.map((cat) => {
         const isSelected = selectedId === cat.id;
         return (
-          <TouchableOpacity
+          <Pressable
             key={cat.id}
             onPress={() => onSelect(isSelected && !showAll ? null : cat.id)}
             onLongPress={() => handleLongPress(cat)}
@@ -89,15 +90,15 @@ export default function CategoryPicker({
               ]}>
               {cat.name}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
       {onAdd && (
-        <TouchableOpacity
+        <Pressable
           onPress={onAdd}
           style={[styles.addChip, { borderColor: colors.border }]}>
           <Ionicons name="add" size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
+        </Pressable>
       )}
     </ScrollView>
   );
