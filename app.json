@@ -23,8 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.shezitt.todoapp",
-      "usesCleartextTraffic": true
+      "package": "com.shezitt.todoapp"
     },
     "web": {
       "bundler": "metro",
@@ -53,7 +52,12 @@
             }
           ]
         }
-      ]
+      ],
+      ["expo-build-properties", {
+        "android": {
+          "usesCleartextTraffic": true
+        }
+      }]
     ],
     "experiments": {
       "typedRoutes": true
