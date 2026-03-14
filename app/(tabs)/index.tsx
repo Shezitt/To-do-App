@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, Keyboard, TouchableWithoutFeedback, Alert, RefreshControl, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, Alert, RefreshControl, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
@@ -174,74 +174,79 @@ export default function TodayScreen() {
     </View>
   );
 
+  const listHeader = (
+    <View>
+      <AddTaskInput onAdd={handleAdd} categories={categories} />
+
+      <CategoryPicker
+        categories={categories}
+        selectedId={filterCategoryId}
+        onSelect={setFilterCategoryId}
+        showAll
+        onAdd={() => setShowAddCategory(true)}
+        onDelete={handleDeleteCategory}
+      />
+
+      {totalToday > 0 && (
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  backgroundColor: allDone ? colors.done : colors.tint,
+                  width: `${(doneTasks.length / totalToday) * 100}%`,
+                },
+              ]}
+            />
+          </View>
+          <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+            {doneTasks.length}/{totalToday} done
+          </Text>
+        </View>
+      )}
+
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        Pending{' '}
+        <Text style={{ color: colors.textSecondary, fontWeight: '400' }}>
+          ({filteredPending.length})
+        </Text>
+      </Text>
+    </View>
+  );
+
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} colors={[colors.tint]} />
+  );
+
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={styles.container}>
-          <AddTaskInput onAdd={handleAdd} categories={categories} />
-
-          <CategoryPicker
-            categories={categories}
-            selectedId={filterCategoryId}
-            onSelect={setFilterCategoryId}
-            showAll
-            onAdd={() => setShowAddCategory(true)}
-            onDelete={handleDeleteCategory}
-          />
-
-          {totalToday > 0 && (
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      backgroundColor: allDone ? colors.done : colors.tint,
-                      width: `${(doneTasks.length / totalToday) * 100}%`,
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.progressText, { color: colors.textSecondary }]}>
-                {doneTasks.length}/{totalToday} done
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.content}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Pending{' '}
-              <Text style={{ color: colors.textSecondary, fontWeight: '400' }}>
-                ({filteredPending.length})
-              </Text>
-            </Text>
-            {filteredPending.length === 0 ? (
-              <ScrollView
-                style={styles.container}
-                refreshControl={
-                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} colors={[colors.tint]} />
-                }
-              >
-                {emptyPendingState}
-                {doneFooter}
-              </ScrollView>
-            ) : (
-              <DraggableFlatList
-                data={filteredPending}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={renderPendingItem}
-                onDragEnd={handleDragEnd}
-                activationDistance={10}
-                ListFooterComponent={doneFooter}
-                containerStyle={{ flex: 1 }}
-                refreshControl={
-                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} colors={[colors.tint]} />
-                }
-              />
-            )}
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
+      {filteredPending.length === 0 ? (
+        <ScrollView
+          style={styles.container}
+          refreshControl={refreshControl}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
+          {listHeader}
+          {emptyPendingState}
+          {doneFooter}
+        </ScrollView>
+      ) : (
+        <DraggableFlatList
+          data={filteredPending}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderPendingItem}
+          onDragEnd={handleDragEnd}
+          activationDistance={10}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={doneFooter}
+          containerStyle={{ flex: 1 }}
+          refreshControl={refreshControl}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        />
+      )}
 
       <AddCategoryModal
         visible={showAddCategory}

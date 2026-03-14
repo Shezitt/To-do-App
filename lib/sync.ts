@@ -148,13 +148,6 @@ export async function syncFromServer(): Promise<void> {
   try {
     const database = await getDatabase();
 
-    // Push local-only data to server first
-    try {
-      await pushLocalToServer();
-    } catch (err) {
-      console.warn('[sync] Failed to push local data to server:', err);
-    }
-
     // Sync categories
     try {
       const remoteCategories = await api.getCategories();
