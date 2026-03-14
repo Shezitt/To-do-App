@@ -60,6 +60,15 @@ async function initDB(): Promise<SQLite.SQLiteDatabase> {
     );
   `);
 
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT NOT NULL,
+      data TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+  `);
+
   // Migrations for existing databases
   const taskCols = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(tasks)`);
   if (!taskCols.some((c) => c.name === 'completed_at')) {
@@ -186,6 +195,38 @@ export async function updateTaskOrder(tasks: { id: number; order_index: number }
       [task.order_index, task.id]
     );
   }
+}
+
+// Sync queue operations
+
+export interface SyncQueueItem {
+  id: number;
+  action: string;
+  data: string;
+  created_at: string;
+}
+
+export async function enqueue(action: string, data: Record<string, unknown>): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync(
+    `INSERT INTO sync_queue (action, data) VALUES (?, ?)`,
+    [action, JSON.stringify(data)]
+  );
+}
+
+export async function getQueueItems(): Promise<SyncQueueItem[]> {
+  const database = await getDatabase();
+  return database.getAllAsync<SyncQueueItem>(`SELECT * FROM sync_queue ORDER BY id ASC`);
+}
+
+export async function removeQueueItem(id: number): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync(`DELETE FROM sync_queue WHERE id = ?`, [id]);
+}
+
+export async function clearQueue(): Promise<void> {
+  const database = await getDatabase();
+  await database.execAsync(`DELETE FROM sync_queue`);
 }
 
 // Category CRUD

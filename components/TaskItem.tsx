@@ -19,6 +19,7 @@ interface TaskItemProps {
   onDelete?: (id: number) => void;
   isDragging?: boolean;
   readOnly?: boolean;
+  onDrag?: () => void;
 }
 
 export default function TaskItem({
@@ -28,6 +29,7 @@ export default function TaskItem({
   onDelete,
   isDragging,
   readOnly,
+  onDrag,
 }: TaskItemProps) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);

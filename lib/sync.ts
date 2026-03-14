@@ -13,8 +13,13 @@ import {
   getCompletedDates,
   searchTasks,
   getCategories,
+  enqueue,
+  getQueueItems,
+  removeQueueItem,
 } from './database';
 import { TaskWidget } from '../widgets/TaskWidget';
+
+// ── Widget refresh ──────────────────────────────────────────────
 
 async function refreshWidget() {
   try {
@@ -34,6 +39,8 @@ async function refreshWidget() {
   }
 }
 
+// ── Audio ───────────────────────────────────────────────────────
+
 const completionSound = require('@/assets/sounds/complete.wav');
 const undoSound = require('@/assets/sounds/undo.wav');
 
@@ -50,102 +57,78 @@ function getUndoPlayer() {
   return undoPlayer;
 }
 
-export type { Task, Category };
+// ── Re-exports (reads always from local SQLite) ─────────────────
 
-// Re-export read operations unchanged (always read from local SQLite)
+export type { Task, Category };
 export { getPendingTasks, getDoneTodayTasks, getTasksByDate, getCompletedDates, searchTasks, getCategories };
 
-export async function addCategory(name: string, color: string): Promise<void> {
-  const database = await getDatabase();
-  try {
-    const serverCat = await api.createCategory(name, color);
-    await database.runAsync(
-      `INSERT OR REPLACE INTO categories (id, name, color, created_at) VALUES (?, ?, ?, ?)`,
-      [serverCat.id, serverCat.name, serverCat.color, serverCat.created_at]
-    );
-  } catch (error) {
-    console.warn('[sync] API unreachable, adding category locally:', error);
-    await database.runAsync(`INSERT INTO categories (name, color) VALUES (?, ?)`, [name, color]);
-  }
-}
+// ── Queue replay ────────────────────────────────────────────────
 
-export async function deleteCategory(id: number): Promise<void> {
-  const database = await getDatabase();
-  try {
-    await api.deleteCategory(id);
-  } catch (error) {
-    console.warn('[sync] API unreachable, deleting category locally only:', error);
-  }
-  await database.runAsync(`UPDATE tasks SET category_id = NULL WHERE category_id = ?`, [id]);
-  await database.runAsync(`DELETE FROM categories WHERE id = ?`, [id]);
-}
+async function replayQueue(): Promise<void> {
+  const items = await getQueueItems();
+  if (items.length === 0) return;
 
-/**
- * Push local-only tasks to the server.
- * Compares local SQLite tasks against server tasks by ID,
- * and creates any missing ones on the server.
- */
-async function pushLocalToServer(): Promise<void> {
-  const database = await getDatabase();
+  console.log(`[sync] Replaying ${items.length} queued operations`);
 
-  // Push local-only categories first
-  const remoteCategories = await api.getCategories();
-  const remoteCatIds = new Set(remoteCategories.map((c) => c.id));
-  const localCategories = await database.getAllAsync<{ id: number; name: string; color: string }>(
-    `SELECT id, name, color FROM categories`
-  );
-  let catIdMap = new Map<number, number>(); // local ID → server ID
-  for (const cat of localCategories) {
-    if (!remoteCatIds.has(cat.id)) {
-      try {
-        const serverCat = await api.createCategory(cat.name, cat.color);
-        catIdMap.set(cat.id, serverCat.id);
-        console.log(`[sync] Pushed local category "${cat.name}" → server ID ${serverCat.id}`);
-      } catch (err) {
-        console.warn(`[sync] Failed to push category "${cat.name}":`, err);
-      }
-    }
-  }
-
-  // Push local-only tasks
-  const remoteTasks = await api.getTasks();
-  const remoteTaskIds = new Set(remoteTasks.map((t) => t.id));
-  const localTasks = await database.getAllAsync<{
-    id: number; title: string; description: string | null;
-    status: string; order_index: number; completed_date: string | null;
-    completed_at: string | null; category_id: number | null;
-  }>(`SELECT id, title, description, status, order_index, completed_date, completed_at, category_id FROM tasks`);
-
-  let pushed = 0;
-  for (const task of localTasks) {
-    if (!remoteTaskIds.has(task.id)) {
-      try {
-        const resolvedCatId = task.category_id ? (catIdMap.get(task.category_id) ?? task.category_id) : null;
-        const serverTask = await api.createTask(task.title, task.description, resolvedCatId);
-        // If it was completed locally, complete it on server too
-        if (task.status === 'done') {
-          await api.completeTask(serverTask.id);
+  for (const item of items) {
+    const data = JSON.parse(item.data);
+    try {
+      switch (item.action) {
+        case 'create_task': {
+          const serverTask = await api.createTask(data.title, data.description, data.categoryId);
+          // Update local task ID to match server ID
+          const database = await getDatabase();
+          if (data.localId) {
+            await database.runAsync(`UPDATE tasks SET id = ? WHERE id = ?`, [serverTask.id, data.localId]);
+          }
+          break;
         }
-        // Update local ID to match server
-        await database.runAsync(`UPDATE tasks SET id = ? WHERE id = ?`, [serverTask.id, task.id]);
-        pushed++;
-      } catch (err) {
-        console.warn(`[sync] Failed to push task "${task.title}":`, err);
+        case 'complete_task':
+          await api.completeTask(data.id);
+          break;
+        case 'undo_task':
+          await api.undoTask(data.id);
+          break;
+        case 'delete_task':
+          await api.deleteTask(data.id);
+          break;
+        case 'reorder_tasks':
+          await api.reorder(data.tasks);
+          break;
+        case 'create_category': {
+          const serverCat = await api.createCategory(data.name, data.color);
+          const database = await getDatabase();
+          if (data.localId) {
+            await database.runAsync(`UPDATE categories SET id = ? WHERE id = ?`, [serverCat.id, data.localId]);
+            // Update any tasks referencing the old local category ID
+            await database.runAsync(`UPDATE tasks SET category_id = ? WHERE category_id = ?`, [serverCat.id, data.localId]);
+          }
+          break;
+        }
+        case 'delete_category':
+          await api.deleteCategory(data.id);
+          break;
+        default:
+          console.warn(`[sync] Unknown queue action: ${item.action}`);
       }
+      // Remove from queue after successful replay
+      await removeQueueItem(item.id);
+      console.log(`[sync] Replayed: ${item.action}`);
+    } catch (err) {
+      console.warn(`[sync] Failed to replay ${item.action}, will retry next sync:`, err);
+      // Stop replaying — don't skip items to preserve order
+      break;
     }
-  }
-  if (pushed > 0) {
-    console.log(`[sync] Pushed ${pushed} local-only tasks to server`);
   }
 }
 
-/**
- * Pull all tasks from the API and replace local SQLite data.
- * Called on app start to ensure local cache matches server.
- * First pushes any local-only data to the server.
- */
+// ── Sync from server ────────────────────────────────────────────
+
 export async function syncFromServer(): Promise<void> {
   try {
+    // Replay any queued offline operations first
+    await replayQueue();
+
     const database = await getDatabase();
 
     // Sync categories
@@ -191,10 +174,8 @@ export async function syncFromServer(): Promise<void> {
   }
 }
 
-/**
- * Add a task: API first, then store locally with server ID.
- * Falls back to local-only if API is unreachable.
- */
+// ── Write operations (API first, queue on failure) ──────────────
+
 export async function addTask(title: string, description?: string, categoryId?: number): Promise<void> {
   const database = await getDatabase();
 
@@ -206,24 +187,24 @@ export async function addTask(title: string, description?: string, categoryId?: 
       [serverTask.id, serverTask.title, serverTask.description, serverTask.status, serverTask.order_index, serverTask.category_id ?? categoryId ?? null, serverTask.created_at]
     );
   } catch (error) {
-    console.warn('[sync] API unreachable, adding locally:', error);
+    console.warn('[sync] API unreachable, adding locally + queuing:', error);
     const result = await database.getFirstAsync<{ max_order: number | null }>(
       `SELECT MAX(order_index) as max_order FROM tasks WHERE status = 'pending'`
     );
     const nextOrder = (result?.max_order ?? -1) + 1;
-    await database.runAsync(
+    const insertResult = await database.runAsync(
       `INSERT INTO tasks (title, description, status, order_index, category_id) VALUES (?, ?, 'pending', ?, ?)`,
       [title, description || null, nextOrder, categoryId || null]
     );
+    await enqueue('create_task', { title, description: description || null, categoryId: categoryId || null, localId: insertResult.lastInsertRowId });
   }
   refreshWidget();
 }
 
-/**
- * Complete a task: API first, then update locally. Plays a sound on completion.
- */
 export async function completeTask(id: number): Promise<void> {
   const database = await getDatabase();
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   try {
     const serverTask = await api.completeTask(id);
@@ -232,16 +213,14 @@ export async function completeTask(id: number): Promise<void> {
       [serverTask.completed_date, serverTask.completed_at, id]
     );
   } catch (error) {
-    console.warn('[sync] API unreachable, completing locally:', error);
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    console.warn('[sync] API unreachable, completing locally + queuing:', error);
     await database.runAsync(
       `UPDATE tasks SET status = 'done', completed_date = ?, completed_at = ? WHERE id = ?`,
       [today, now.toISOString(), id]
     );
+    await enqueue('complete_task', { id });
   }
 
-  // Haptic feedback (instant) + sound
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   try {
     const player = getCompletionPlayer();
@@ -253,9 +232,6 @@ export async function completeTask(id: number): Promise<void> {
   refreshWidget();
 }
 
-/**
- * Undo a task: API first, then update locally.
- */
 export async function undoTask(id: number): Promise<void> {
   const database = await getDatabase();
 
@@ -275,7 +251,7 @@ export async function undoTask(id: number): Promise<void> {
       [serverTask.order_index, id]
     );
   } catch (error) {
-    console.warn('[sync] API unreachable, undoing locally:', error);
+    console.warn('[sync] API unreachable, undoing locally + queuing:', error);
     const result = await database.getFirstAsync<{ max_order: number | null }>(
       `SELECT MAX(order_index) as max_order FROM tasks WHERE status = 'pending'`
     );
@@ -284,36 +260,33 @@ export async function undoTask(id: number): Promise<void> {
       `UPDATE tasks SET status = 'pending', completed_date = NULL, completed_at = NULL, order_index = ? WHERE id = ?`,
       [nextOrder, id]
     );
+    await enqueue('undo_task', { id });
   }
   refreshWidget();
 }
 
-/**
- * Delete a task: API first, then delete locally.
- */
 export async function deleteTask(id: number): Promise<void> {
   const database = await getDatabase();
 
   try {
     await api.deleteTask(id);
   } catch (error) {
-    console.warn('[sync] API unreachable, deleting locally only:', error);
+    console.warn('[sync] API unreachable, deleting locally + queuing:', error);
+    await enqueue('delete_task', { id });
   }
 
   await database.runAsync(`DELETE FROM tasks WHERE id = ?`, [id]);
   refreshWidget();
 }
 
-/**
- * Update task order: API first, then update locally.
- */
 export async function updateTaskOrder(tasks: { id: number; order_index: number }[]): Promise<void> {
   const database = await getDatabase();
 
   try {
     await api.reorder(tasks);
   } catch (error) {
-    console.warn('[sync] API unreachable, reordering locally only:', error);
+    console.warn('[sync] API unreachable, reordering locally + queuing:', error);
+    await enqueue('reorder_tasks', { tasks });
   }
 
   for (const task of tasks) {
@@ -322,4 +295,31 @@ export async function updateTaskOrder(tasks: { id: number; order_index: number }
       [task.order_index, task.id]
     );
   }
+}
+
+export async function addCategory(name: string, color: string): Promise<void> {
+  const database = await getDatabase();
+  try {
+    const serverCat = await api.createCategory(name, color);
+    await database.runAsync(
+      `INSERT OR REPLACE INTO categories (id, name, color, created_at) VALUES (?, ?, ?, ?)`,
+      [serverCat.id, serverCat.name, serverCat.color, serverCat.created_at]
+    );
+  } catch (error) {
+    console.warn('[sync] API unreachable, adding category locally + queuing:', error);
+    const result = await database.runAsync(`INSERT INTO categories (name, color) VALUES (?, ?)`, [name, color]);
+    await enqueue('create_category', { name, color, localId: result.lastInsertRowId });
+  }
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  const database = await getDatabase();
+  try {
+    await api.deleteCategory(id);
+  } catch (error) {
+    console.warn('[sync] API unreachable, deleting category locally + queuing:', error);
+    await enqueue('delete_category', { id });
+  }
+  await database.runAsync(`UPDATE tasks SET category_id = NULL WHERE category_id = ?`, [id]);
+  await database.runAsync(`DELETE FROM categories WHERE id = ?`, [id]);
 }

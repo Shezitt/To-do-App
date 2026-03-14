@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Alert, RefreshControl, ScrollView } from 'react
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, TouchableOpacity } from 'react-native-gesture-handler';
 
 import { useColors } from '@/components/Themed';
 import AddTaskInput from '@/components/AddTaskInput';
@@ -125,12 +125,14 @@ export default function TodayScreen() {
 
   const renderPendingItem = ({ item, drag, isActive }: RenderItemParams<Task>) => (
     <ScaleDecorator>
-      <TaskItem
-        task={item}
-        onComplete={handleComplete}
-        onDelete={handleDelete}
-        isDragging={isActive}
-      />
+      <TouchableOpacity onLongPress={drag} delayLongPress={200} activeOpacity={0.7}>
+        <TaskItem
+          task={item}
+          onComplete={handleComplete}
+          onDelete={handleDelete}
+          isDragging={isActive}
+        />
+      </TouchableOpacity>
     </ScaleDecorator>
   );
 
