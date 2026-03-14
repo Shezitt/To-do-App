@@ -3,7 +3,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import 'react-native-reanimated';
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 
@@ -32,12 +33,25 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
+  const appState = useRef(AppState.currentState);
+
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
       syncFromServer();
     }
   }, [loaded]);
+
+  // Re-sync when app comes back to foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        syncFromServer();
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, []);
 
   if (!loaded) {
     return null;

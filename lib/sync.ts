@@ -1,5 +1,7 @@
+import React from 'react';
 import { createAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { api } from './api';
 import {
   Task,
@@ -12,6 +14,25 @@ import {
   searchTasks,
   getCategories,
 } from './database';
+import { TaskWidget } from '../widgets/TaskWidget';
+
+async function refreshWidget() {
+  try {
+    const tasks = await getPendingTasks();
+    const simpleTasks = tasks.map((t) => ({ id: t.id, title: t.title }));
+    await requestWidgetUpdate({
+      widgetName: 'TaskWidget',
+      renderWidget: () =>
+        React.createElement(TaskWidget, {
+          tasks: simpleTasks,
+          pendingCount: simpleTasks.length,
+          allDone: simpleTasks.length === 0,
+        }),
+    });
+  } catch {
+    // Widget might not be placed, ignore
+  }
+}
 
 const completionSound = require('@/assets/sounds/complete.wav');
 const undoSound = require('@/assets/sounds/undo.wav');
@@ -171,6 +192,7 @@ export async function syncFromServer(): Promise<void> {
       );
     }
     console.log(`[sync] Synced ${remoteTasks.length} tasks from server`);
+    refreshWidget();
   } catch (error) {
     console.warn('[sync] Failed to sync from server, using local data:', error);
   }
@@ -201,6 +223,7 @@ export async function addTask(title: string, description?: string, categoryId?: 
       [title, description || null, nextOrder, categoryId || null]
     );
   }
+  refreshWidget();
 }
 
 /**
@@ -234,6 +257,7 @@ export async function completeTask(id: number): Promise<void> {
   } catch (err) {
     console.warn('[sync] Failed to play completion sound:', err);
   }
+  refreshWidget();
 }
 
 /**
@@ -268,6 +292,7 @@ export async function undoTask(id: number): Promise<void> {
       [nextOrder, id]
     );
   }
+  refreshWidget();
 }
 
 /**
@@ -283,6 +308,7 @@ export async function deleteTask(id: number): Promise<void> {
   }
 
   await database.runAsync(`DELETE FROM tasks WHERE id = ?`, [id]);
+  refreshWidget();
 }
 
 /**

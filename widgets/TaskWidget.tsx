@@ -17,27 +17,50 @@ export function TaskWidget({ tasks, pendingCount, allDone }: TaskWidgetProps) {
         backgroundColor: '#1E293B',
         borderRadius: 16,
         padding: 14,
-      }}>
+      }}
+      clickAction="OPEN_APP"
+    >
       {/* Header */}
       <FlexWidget
         style={{
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
+          width: 'match_parent',
           marginBottom: 10,
         }}>
         <TextWidget
           text="Today"
           style={{ fontSize: 16, fontWeight: 'bold', color: '#F1F5F9' }}
         />
-        <TextWidget
-          text={allDone ? '✓ All done' : `${pendingCount} pending`}
+        <FlexWidget
           style={{
-            fontSize: 12,
-            color: allDone ? '#10B981' : '#06B6D4',
-            fontWeight: '600',
-          }}
-        />
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}>
+          <TextWidget
+            text={allDone ? '✓ All done' : `${pendingCount} pending`}
+            style={{
+              fontSize: 12,
+              color: allDone ? '#10B981' : '#06B6D4',
+              fontWeight: '600',
+              marginRight: 10,
+            }}
+          />
+          <FlexWidget
+            clickAction="REFRESH"
+            style={{
+              backgroundColor: '#334155',
+              borderRadius: 12,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+            }}>
+            <TextWidget
+              text="↻"
+              style={{ fontSize: 14, color: '#94A3B8' }}
+            />
+          </FlexWidget>
+        </FlexWidget>
       </FlexWidget>
 
       {/* Task list or empty state */}
@@ -45,7 +68,7 @@ export function TaskWidget({ tasks, pendingCount, allDone }: TaskWidgetProps) {
         <FlexWidget
           style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <TextWidget
-            text="Great work today! 🎉"
+            text="All done! Great work today!"
             style={{ fontSize: 13, color: '#94A3B8', textAlign: 'center' }}
           />
         </FlexWidget>
@@ -81,7 +104,6 @@ export function TaskWidget({ tasks, pendingCount, allDone }: TaskWidgetProps) {
                 style={{
                   fontSize: 13,
                   color: '#CBD5E1',
-                  flex: 1,
                 }}
                 maxLines={1}
               />
@@ -95,12 +117,6 @@ export function TaskWidget({ tasks, pendingCount, allDone }: TaskWidgetProps) {
           )}
         </FlexWidget>
       )}
-
-      {/* Tap hint */}
-      <TextWidget
-        text="Tap to open"
-        style={{ fontSize: 10, color: '#475569', marginTop: 6 }}
-      />
     </FlexWidget>
   );
 }
