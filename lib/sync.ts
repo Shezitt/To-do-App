@@ -60,12 +60,79 @@ export async function deleteCategory(id: number): Promise<void> {
 }
 
 /**
+ * Push local-only tasks to the server.
+ * Compares local SQLite tasks against server tasks by ID,
+ * and creates any missing ones on the server.
+ */
+async function pushLocalToServer(): Promise<void> {
+  const database = await getDatabase();
+
+  // Push local-only categories first
+  const remoteCategories = await api.getCategories();
+  const remoteCatIds = new Set(remoteCategories.map((c) => c.id));
+  const localCategories = await database.getAllAsync<{ id: number; name: string; color: string }>(
+    `SELECT id, name, color FROM categories`
+  );
+  let catIdMap = new Map<number, number>(); // local ID → server ID
+  for (const cat of localCategories) {
+    if (!remoteCatIds.has(cat.id)) {
+      try {
+        const serverCat = await api.createCategory(cat.name, cat.color);
+        catIdMap.set(cat.id, serverCat.id);
+        console.log(`[sync] Pushed local category "${cat.name}" → server ID ${serverCat.id}`);
+      } catch (err) {
+        console.warn(`[sync] Failed to push category "${cat.name}":`, err);
+      }
+    }
+  }
+
+  // Push local-only tasks
+  const remoteTasks = await api.getTasks();
+  const remoteTaskIds = new Set(remoteTasks.map((t) => t.id));
+  const localTasks = await database.getAllAsync<{
+    id: number; title: string; description: string | null;
+    status: string; order_index: number; completed_date: string | null;
+    completed_at: string | null; category_id: number | null;
+  }>(`SELECT id, title, description, status, order_index, completed_date, completed_at, category_id FROM tasks`);
+
+  let pushed = 0;
+  for (const task of localTasks) {
+    if (!remoteTaskIds.has(task.id)) {
+      try {
+        const resolvedCatId = task.category_id ? (catIdMap.get(task.category_id) ?? task.category_id) : null;
+        const serverTask = await api.createTask(task.title, task.description, resolvedCatId);
+        // If it was completed locally, complete it on server too
+        if (task.status === 'done') {
+          await api.completeTask(serverTask.id);
+        }
+        // Update local ID to match server
+        await database.runAsync(`UPDATE tasks SET id = ? WHERE id = ?`, [serverTask.id, task.id]);
+        pushed++;
+      } catch (err) {
+        console.warn(`[sync] Failed to push task "${task.title}":`, err);
+      }
+    }
+  }
+  if (pushed > 0) {
+    console.log(`[sync] Pushed ${pushed} local-only tasks to server`);
+  }
+}
+
+/**
  * Pull all tasks from the API and replace local SQLite data.
  * Called on app start to ensure local cache matches server.
+ * First pushes any local-only data to the server.
  */
 export async function syncFromServer(): Promise<void> {
   try {
     const database = await getDatabase();
+
+    // Push local-only data to server first
+    try {
+      await pushLocalToServer();
+    } catch (err) {
+      console.warn('[sync] Failed to push local data to server:', err);
+    }
 
     // Sync categories
     try {
@@ -82,17 +149,11 @@ export async function syncFromServer(): Promise<void> {
       console.warn('[sync] Failed to sync categories, using local:', catError);
     }
 
-    // Sync tasks — preserve local category_id if server doesn't support it yet
+    // Sync tasks
     const remoteTasks = await api.getTasks();
-    const localTasks = await database.getAllAsync<{ id: number; category_id: number | null }>(
-      `SELECT id, category_id FROM tasks`
-    );
-    const localCategoryMap = new Map(localTasks.map((t) => [t.id, t.category_id]));
-
     await database.execAsync(`DELETE FROM tasks`);
 
     for (const task of remoteTasks) {
-      const resolvedCategoryId = task.category_id ?? localCategoryMap.get(task.id) ?? null;
       await database.runAsync(
         `INSERT INTO tasks (id, title, description, status, order_index, completed_date, completed_at, category_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -104,7 +165,7 @@ export async function syncFromServer(): Promise<void> {
           task.order_index,
           task.completed_date,
           task.completed_at,
-          resolvedCategoryId,
+          task.category_id,
           task.created_at,
         ]
       );

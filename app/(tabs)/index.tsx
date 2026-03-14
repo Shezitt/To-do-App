@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
+import { StyleSheet, View, Text, Keyboard, TouchableWithoutFeedback, Alert, RefreshControl, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
@@ -23,6 +23,7 @@ import {
   getCategories,
   addCategory,
   deleteCategory,
+  syncFromServer,
 } from '@/lib/sync';
 
 export default function TodayScreen() {
@@ -32,6 +33,7 @@ export default function TodayScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [filterCategoryId, setFilterCategoryId] = useState<number | null>(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadTasks = useCallback(async () => {
     const [pending, done, cats] = await Promise.all([
@@ -49,6 +51,13 @@ export default function TodayScreen() {
       loadTasks();
     }, [loadTasks])
   );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await syncFromServer();
+    await loadTasks();
+    setRefreshing(false);
+  }, [loadTasks]);
 
   const handleAdd = async (title: string, description?: string, categoryId?: number) => {
     await addTask(title, description, categoryId);
@@ -207,10 +216,15 @@ export default function TodayScreen() {
               </Text>
             </Text>
             {filteredPending.length === 0 ? (
-              <View style={styles.container}>
+              <ScrollView
+                style={styles.container}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} colors={[colors.tint]} />
+                }
+              >
                 {emptyPendingState}
                 {doneFooter}
-              </View>
+              </ScrollView>
             ) : (
               <DraggableFlatList
                 data={filteredPending}
@@ -220,6 +234,9 @@ export default function TodayScreen() {
                 activationDistance={10}
                 ListFooterComponent={doneFooter}
                 containerStyle={{ flex: 1 }}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.tint} colors={[colors.tint]} />
+                }
               />
             )}
           </View>
